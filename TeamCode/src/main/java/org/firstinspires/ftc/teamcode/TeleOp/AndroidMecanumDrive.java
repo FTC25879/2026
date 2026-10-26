@@ -16,14 +16,6 @@ A to fire artifact
 */
 @TeleOp(name = "Android Mecanum Drive")
 public class AndroidMecanumDrive extends LinearOpMode {
-    // initialize motor names
-    private DcMotor backLeft;
-    private DcMotor frontLeft;
-    private DcMotor backRight;
-    private DcMotor frontRight;
-    //private DcMotor launcherWheel;
-    private DcMotor ballPusher;
-    private CRServo ballLoader;
     // private DcMotor intake;
     @Override
     public void runOpMode() {
@@ -33,16 +25,18 @@ public class AndroidMecanumDrive extends LinearOpMode {
         double strafe;
         double pow1;
         double pow2;
-        boolean servoOn;
+        // boolean servoOn;
         // assign motors to motor names
-        backLeft = hardwareMap.get(DcMotor.class, "backLeft");
-        frontLeft = hardwareMap.get(DcMotor.class, "frontLeft");
-        backRight = hardwareMap.get(DcMotor.class, "backRight");
-        frontRight = hardwareMap.get(DcMotor.class, "frontRight");
+        // initialize motor names
+        DcMotor backLeft = hardwareMap.get(DcMotor.class, "backLeft");
+        DcMotor frontLeft = hardwareMap.get(DcMotor.class, "frontLeft");
+        DcMotor backRight = hardwareMap.get(DcMotor.class, "backRight");
+        DcMotor frontRight = hardwareMap.get(DcMotor.class, "frontRight");
         // launcherWheel = hardwareMap.get(DcMotor.class, "LauncherWheel");
         //  intake = hardwareMap.get(DcMotor.class, "intake");
-        ballLoader = hardwareMap.get(CRServo.class, "ballLoader");
-        ballPusher = hardwareMap.get(DcMotor.class, "ballPusher");
+        CRServo ballLoader = hardwareMap.get(CRServo.class, "ballLoader");
+        //private DcMotor launcherWheel;
+        DcMotor ballPusher = hardwareMap.get(DcMotor.class, "ballPusher");
         // set motor directions
         backLeft.setDirection(DcMotor.Direction.FORWARD);
         frontLeft.setDirection(DcMotor.Direction.REVERSE);
