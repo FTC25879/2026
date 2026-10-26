@@ -68,7 +68,7 @@ public class AndroidFirstCode extends LinearOpMode {
         // frontLeft.setPower(-1);
         // frontRight.setPower(-1);
         // launcherWheel.setPower(0);
-        ballPusher.setPower(.5);
+        ballPusher.setPower(.35);
         // ballLoader.setPower(0);
         // run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
