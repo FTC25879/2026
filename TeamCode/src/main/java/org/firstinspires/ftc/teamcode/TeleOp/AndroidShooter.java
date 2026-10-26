@@ -7,8 +7,8 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.util.Range;
 
-@TeleOp(name = "Shooter Control")
-public class Shooter extends LinearOpMode {
+@TeleOp(name = "Android Shooter Control")
+public class AndroidShooter extends LinearOpMode {
 
     @Override
     public void runOpMode() {

@@ -14,8 +14,8 @@ B to push artifact into launcher
 X to pull artifact out of launcher
 A to fire artifact
 */
-@TeleOp(name = "MecanumDrive")
-public class MecanumDrive extends LinearOpMode {
+@TeleOp(name = "Android Mecanum Drive")
+public class AndroidMecanumDrive extends LinearOpMode {
     // initialize motor names
     private DcMotor backLeft;
     private DcMotor frontLeft;

@@ -6,8 +6,8 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.Range;
 
-@TeleOp(name = "Simple Servo Control", group = "Linear OpMode")
-public class ServoTesting extends LinearOpMode {
+@TeleOp(name = "Android Simple Servo Control", group = "Linear OpMode")
+public class AndroidServoTesting extends LinearOpMode {
 
     private double servoPosition = 0.5;
 

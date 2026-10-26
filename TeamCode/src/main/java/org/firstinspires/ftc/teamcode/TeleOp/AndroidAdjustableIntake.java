@@ -6,8 +6,8 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.util.Range;
 
-@TeleOp(name = "Intake Control")
-public class AdjustableIntake extends LinearOpMode {
+@TeleOp(name = "Android Intake Control")
+public class AndroidAdjustableIntake extends LinearOpMode {
 
     @Override
     public void runOpMode() {
