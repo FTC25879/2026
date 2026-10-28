@@ -10,37 +10,30 @@ import com.qualcomm.robotcore.util.Range;
 @TeleOp(name = "Android Shooter Control Hunter")
 public class AndroidShooter extends LinearOpMode {
 
+    private static final double MAX_TARGET_RPM = 6000;
+    private static final double RPM_STEP = 250;
+
     @Override
     public void runOpMode() {
 
-        // Expansion Hub motor port 3 (fourth connector)
         DcMotorEx shooter = hardwareMap.get(
                 DcMotorEx.class, "shooter"
         );
 
-        // Automatically obtain configured motor specifications
+        // Reverse motor direction
+        shooter.setDirection(DcMotor.Direction.REVERSE);
+
         double ticksPerRev =
                 shooter.getMotorType().getTicksPerRev();
 
-        double maxRPM =
-                shooter.getMotorType().getMaxRPM();
-
-        if (ticksPerRev <= 0 || maxRPM <= 0) {
-            telemetry.addLine("ERROR: Select correct motor type");
+        if (ticksPerRev <= 0) {
+            telemetry.addLine("ERROR: Invalid motor encoder");
             telemetry.update();
             return;
         }
 
-        // Adapt increments to motor speed
-        double rpmStep;
-
-        if (maxRPM <= 200) {
-            rpmStep = 10;       // HD Hex 40:1
-        } else if (maxRPM <= 400) {
-            rpmStep = 25;       // HD Hex 20:1
-        } else {
-            rpmStep = 250;      // High-speed motor
-        }
+        double ratedRPM =
+                shooter.getMotorType().getMaxRPM();
 
         double targetRPM = 0;
         int activeGamepad = 0;
@@ -59,8 +52,11 @@ public class AndroidShooter extends LinearOpMode {
         );
 
         telemetry.addLine("SHOOTER READY");
-        telemetry.addData("Max RPM", "%.0f", maxRPM);
-        telemetry.addData("Step", "%.0f RPM", rpmStep);
+        telemetry.addLine("Direction: REVERSE");
+        telemetry.addData("Target Limit", "%.0f RPM",
+                MAX_TARGET_RPM);
+        telemetry.addData("Motor Rated RPM", "%.0f",
+                ratedRPM);
         telemetry.update();
 
         waitForStart();
@@ -68,7 +64,6 @@ public class AndroidShooter extends LinearOpMode {
         try {
             while (opModeIsActive()) {
 
-                // Automatically accept either gamepad
                 boolean up1 = gamepad1.dpad_up;
                 boolean down1 = gamepad1.dpad_down;
                 boolean up2 = gamepad2.dpad_up;
@@ -79,7 +74,6 @@ public class AndroidShooter extends LinearOpMode {
                 boolean pressUp2 = up2 && !lastUp2;
                 boolean pressDown2 = down2 && !lastDown2;
 
-                // Stop from either gamepad
                 if (gamepad1.a || gamepad2.a) {
                     targetRPM = 0;
                     activeGamepad = gamepad1.a ? 1 : 2;
@@ -87,14 +81,14 @@ public class AndroidShooter extends LinearOpMode {
                 else if (pressUp1 || pressDown1) {
                     activeGamepad = 1;
 
-                    if (pressUp1) targetRPM += rpmStep;
-                    if (pressDown1) targetRPM -= rpmStep;
+                    if (pressUp1) targetRPM += RPM_STEP;
+                    if (pressDown1) targetRPM -= RPM_STEP;
                 }
                 else if (pressUp2 || pressDown2) {
                     activeGamepad = 2;
 
-                    if (pressUp2) targetRPM += rpmStep;
-                    if (pressDown2) targetRPM -= rpmStep;
+                    if (pressUp2) targetRPM += RPM_STEP;
+                    if (pressDown2) targetRPM -= RPM_STEP;
                 }
 
                 lastUp1 = up1;
@@ -103,10 +97,9 @@ public class AndroidShooter extends LinearOpMode {
                 lastDown2 = down2;
 
                 targetRPM = Range.clip(
-                        targetRPM, 0, maxRPM
+                        targetRPM, 0, MAX_TARGET_RPM
                 );
 
-                // Closed-loop RPM control
                 double targetVelocity =
                         targetRPM * ticksPerRev / 60.0;
 
@@ -116,7 +109,6 @@ public class AndroidShooter extends LinearOpMode {
                     shooter.setVelocity(targetVelocity);
                 }
 
-                // Actual RPM measured by encoder
                 double actualRPM =
                         Math.abs(shooter.getVelocity())
                                 * 60.0 / ticksPerRev;
@@ -134,18 +126,29 @@ public class AndroidShooter extends LinearOpMode {
                         targetRPM - actualRPM
                 );
                 telemetry.addData(
-                        "MAX RPM", "%.0f", maxRPM
+                        "MAX TARGET RPM", "%.0f",
+                        MAX_TARGET_RPM
                 );
                 telemetry.addData(
-                        "RPM STEP", "%.0f", rpmStep
+                        "MOTOR RATED RPM", "%.0f",
+                        ratedRPM
+                );
+                telemetry.addData(
+                        "RPM STEP", "%.0f", RPM_STEP
                 );
                 telemetry.addData(
                         "GAMEPAD", activeGamepad
                 );
 
-                telemetry.addLine("UP: Faster");
-                telemetry.addLine("DOWN: Slower");
+                telemetry.addLine("D-PAD UP: Faster");
+                telemetry.addLine("D-PAD DOWN: Slower");
                 telemetry.addLine("A: Stop");
+
+                if (targetRPM > ratedRPM) {
+                    telemetry.addLine(
+                            "WARNING: Above rated motor RPM"
+                    );
+                }
 
                 telemetry.update();
                 sleep(20);
