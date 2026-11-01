@@ -17,7 +17,7 @@ import static com.pedropathing.api.Paths.line;
  * The transformations assume field symmetry and the coordinate bounds below.
  * Check these assumptions against your season's field and the Visualizer.
  */
-public final class Autopaths {
+public final class AutoPaths {
 
     // IMPORTANT: Use the same coordinate bounds as your Visualizer.
     // Common FTC Pedro coordinates use 0..144 inches on each axis.
@@ -26,7 +26,7 @@ public final class Autopaths {
 
     private static final PoseFactory DEGREES = PoseFactory.degrees();
 
-    private Autopaths() {
+    private AutoPaths() {
         // Utility class; do not instantiate.
     }
 
