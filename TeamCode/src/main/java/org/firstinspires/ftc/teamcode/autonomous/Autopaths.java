@@ -26,7 +26,7 @@ public final class Autopaths {
 
     private static final PoseFactory DEGREES = PoseFactory.degrees();
 
-    private AutoPaths() {
+    private Autopaths() {
         // Utility class; do not instantiate.
     }
 
