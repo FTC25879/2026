@@ -1,5 +1,99 @@
+package org.firstinspires.ftc.teamcode.subsystems;
 
-package org.firstinspires.ftc.teamcode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.util.ElapsedTime;
+import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
+import org.firstinspires.ftc.teamcode.config.RobotConfig;
+
+/** FTC SDK closed-loop velocity control, measured RPM, current, readiness, fault latch. */
+public final class Shooter {
+    private final DcMotorEx motor;
+    private final ElapsedTime readyTimer = new ElapsedTime();
+    private final ElapsedTime currentTimer = new ElapsedTime();
+    private double targetRPM = RobotConfig.SHOOTER_INITIAL_RPM;
+    private boolean enabled;
+    private boolean readyTimerActive;
+    private boolean overCurrentTiming;
+    private String fault = "";
+
+    public Shooter(HardwareMap map) {
+        if (RobotConfig.SHOOTER_TICKS_PER_REV <= 0) {
+            throw new IllegalArgumentException("Set SHOOTER_TICKS_PER_REV > 0");
+        }
+        motor = map.get(DcMotorEx.class, RobotConfig.SHOOTER);
+        motor.setDirection(RobotConfig.SHOOTER_DIRECTION);
+        motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        stop();
+    }
+    public void setTargetRPM(double rpm) {
+        targetRPM = Math.max(0, Math.min(RobotConfig.SHOOTER_MAX_RPM, rpm));
+        readyTimerActive = false;
+    }
+    public void adjustRPM(double increment) { setTargetRPM(targetRPM + increment); }
+    public double getTargetRPM() { return targetRPM; }
+    public double getActualRPM() {
+        return Math.abs(motor.getVelocity()) * 60.0 / RobotConfig.SHOOTER_TICKS_PER_REV;
+    }
+    public double getCurrentAmps() { return motor.getCurrent(CurrentUnit.AMPS); }
+    public boolean isEnabled() { return enabled; }
+    public String getFault() { return fault; }
+    public boolean hasFault() { return !fault.isEmpty(); }
+
+    public void start() {
+        if (!hasFault() && targetRPM > 0) {
+            enabled = true;
+            readyTimerActive = false;
+            overCurrentTiming = false;
+        }
+    }
+    public void stop() {
+        enabled = false;
+        readyTimerActive = false;
+        overCurrentTiming = false;
+        motor.setVelocity(0);
+        motor.setPower(0);
+    }
+    public void fault(String reason) {
+        if (!hasFault()) fault = reason;
+        stop();
+    }
+    /** Only use when motor is stopped and inspection shows it is safe to restart. */
+    public void clearFault() { if (!enabled) fault = ""; }
+
+    public void update(double batteryVoltage) {
+        if (!enabled || hasFault()) return;
+        if (batteryVoltage > 0 && batteryVoltage < RobotConfig.MIN_BATTERY_VOLTAGE) {
+            fault("LOW BATTERY " + String.format(java.util.Locale.US, "%.1fV", batteryVoltage));
+            return;
+        }
+        double amps = getCurrentAmps();
+        if (amps > RobotConfig.SHOOTER_MAX_AMPS) {
+            if (!overCurrentTiming) { currentTimer.reset(); overCurrentTiming = true; }
+            if (currentTimer.seconds() >= RobotConfig.SHOOTER_OVER_CURRENT_SECONDS) {
+                fault("SHOOTER OVERCURRENT");
+                return;
+            }
+        } else {
+            overCurrentTiming = false;
+        }
+        motor.setVelocity(targetRPM * RobotConfig.SHOOTER_TICKS_PER_REV / 60.0);
+        boolean withinBand = Math.abs(targetRPM - getActualRPM()) <= RobotConfig.SHOOTER_READY_TOLERANCE_RPM;
+        if (!withinBand) readyTimerActive = false;
+        else if (!readyTimerActive) { readyTimer.reset(); readyTimerActive = true; }
+    }
+    public boolean isReady() {
+        return enabled && !hasFault() && readyTimerActive
+                && readyTimer.seconds() >= RobotConfig.SHOOTER_READY_STABLE_SECONDS
+                && Math.abs(targetRPM - getActualRPM()) <= RobotConfig.SHOOTER_READY_TOLERANCE_RPM;
+    }
+}
+
+
+/**
+package org.firstinspires.ftc.teamcode.subsystems;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -12,7 +106,7 @@ import com.qualcomm.robotcore.util.Range;
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 
 @TeleOp(name = "Android Shooter Control Hunter")
-public class AndroidShooter extends LinearOpMode {
+public class Shooter extends LinearOpMode {
 
     private static final double MAX_TARGET_RPM = 6000;
 
@@ -338,3 +432,4 @@ public class AndroidShooter extends LinearOpMode {
         }
     }
 }
+**/

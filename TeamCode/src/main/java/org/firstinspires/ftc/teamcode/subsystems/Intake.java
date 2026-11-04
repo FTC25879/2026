@@ -1,5 +1,40 @@
+package org.firstinspires.ftc.teamcode.subsystems;
 
-package org.firstinspires.ftc.teamcode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.HardwareMap;
+
+import org.firstinspires.ftc.teamcode.config.RobotConfig;
+
+/** Assumes one motor and a chain/belt driving the pair of intake rollers. */
+public final class Intake {
+    private final DcMotorEx motor;
+    private double commandedPower;
+
+    public Intake(HardwareMap map) {
+        motor = map.get(DcMotorEx.class, RobotConfig.INTAKE);
+        motor.setDirection(RobotConfig.INTAKE_DIRECTION);
+        motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        stop();
+    }
+
+    public void start() { setPower(RobotConfig.INTAKE_POWER); }
+    public void reverse() { setPower(-RobotConfig.INTAKE_POWER); }
+    public void stop() { setPower(0); }
+    public void setPower(double power) {
+        commandedPower = Math.max(-1, Math.min(1, power));
+        motor.setPower(commandedPower);
+    }
+    public double getPower() { return commandedPower; }
+}
+
+
+/**
+
+
+
+package org.firstinspires.ftc.teamcode.subsystems;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -7,7 +42,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.util.Range;
 
 @TeleOp(name = "Android Intake Control")
-public class AndroidAdjustableIntake extends LinearOpMode {
+public class Intake extends LinearOpMode {
 
     @Override
     public void runOpMode() {
@@ -100,3 +135,4 @@ public class AndroidAdjustableIntake extends LinearOpMode {
         }
     }
 }
+**/
