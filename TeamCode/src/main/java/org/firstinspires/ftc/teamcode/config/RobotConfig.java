@@ -14,11 +14,13 @@ public final class RobotConfig {
     public static final String FRONT_RIGHT = "frontRight";
     public static final String BACK_LEFT = "backLeft";
     public static final String BACK_RIGHT = "backRight";
-    public static final String INTAKE = "intake";  // One motor driving both intake rollers
+    public static final String INTAKE = "ballPusher";  // One motor driving both intake rollers
     public static final String SHOOTER = "shooter"; // Expansion Hub motor port 4
     public static final String GATE = "gate";       // Confirm your servo config
     public static final String STICK = "stick";     // Expansion Hub servo port 5
     public static final String IMU = "imu";
+
+
 
     // Confirm directions on the REAL robot. MecanumTuner outputs the correct values.
     public static final DcMotorSimple.Direction FL_DIRECTION = DcMotorSimple.Direction.REVERSE;
@@ -32,7 +34,7 @@ public final class RobotConfig {
     public static final RevHubOrientationOnRobot HUB_ORIENTATION =
             new RevHubOrientationOnRobot(
                     RevHubOrientationOnRobot.LogoFacingDirection.UP,
-                    RevHubOrientationOnRobot.UsbFacingDirection.BACKWARD);
+                    RevHubOrientationOnRobot.UsbFacingDirection.FORWARD);
 
     // Encoder signs: +1/-1 chosen so all four readings increase while driving forward.
     // These are independent from motor directions and must be calibrated.
@@ -45,12 +47,14 @@ public final class RobotConfig {
     public static final boolean LOCALIZATION_CALIBRATED = false; // Set true AFTER physical tests
 
     // Servo travel is deliberately small at first. Calibrate with linkage clear.
-    public static final double GATE_CLOSED = 0.50;
-    public static final double GATE_OPEN = 0.57;
     public static final double STICK_RETRACTED = 0.50;
     public static final double STICK_EXTENDED = 0.60;
     public static final double GATE_OPEN_SECONDS = 0.20;
     public static final double GATE_SETTLE_SECONDS = 0.20;
+
+    public static final double GATE_OPEN = 1.0;
+    public static final double GATE_CLOSED = 0.0;
+    public static final double GATE_CENTER = 0.5;
 
     public static final double INTAKE_POWER = 0.65;
 
@@ -77,4 +81,8 @@ public final class RobotConfig {
     // Hard interlocks: leave false until drive localization/paths and shooting are validated.
     public static final boolean ENABLE_PEDRO_AUTONOMOUS = false;
     public static final boolean ENABLE_AUTO_SHOOTING = false;
+
+    // Enter VERIFIED field poses in AutoPaths before enabling field-coordinate Pedro paths.
+    // This flag protects against treating the (0,0,0) test origin as a real start pose.
+    public static final boolean AUTO_FIELD_POSES_VERIFIED = false;
 }

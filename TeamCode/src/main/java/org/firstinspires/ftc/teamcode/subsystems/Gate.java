@@ -1,11 +1,21 @@
+
 package org.firstinspires.ftc.teamcode.subsystems;
 
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
+
 import org.firstinspires.ftc.teamcode.config.RobotConfig;
 
-/** Positional servo: gate in front of the flywheel. */
+/**
+ * Positional servo: gate in front of the flywheel.
+ *
+ * Same positions as OnServoTesting:
+ * OPEN   = 1.0
+ * CLOSED = 0.0
+ * CENTER = 0.5
+ */
 public final class Gate {
+
     private final Servo servo;
     private boolean open;
 
@@ -13,14 +23,45 @@ public final class Gate {
         servo = map.get(Servo.class, RobotConfig.GATE);
         close();
     }
-    public void open() { servo.setPosition(RobotConfig.GATE_OPEN); open = true; }
-    public void close() { servo.setPosition(RobotConfig.GATE_CLOSED); open = false; }
-    public boolean isOpen() { return open; }
+
+    /** Move gate to position 1.0 */
+    public void open() {
+        servo.setPosition(RobotConfig.GATE_OPEN);
+        open = true;
+    }
+
+    /** Move gate to position 0.0 */
+    public void close() {
+        servo.setPosition(RobotConfig.GATE_CLOSED);
+        open = false;
+    }
+
+    /** Move gate to center position 0.5 */
+    public void center() {
+        servo.setPosition(RobotConfig.GATE_CENTER);
+        open = false;
+    }
+
+    /** Set any servo position between 0.0 and 1.0 */
+    public void setPosition(double position) {
+        position = Math.max(0.0, Math.min(1.0, position));
+        servo.setPosition(position);
+        open = Math.abs(position - RobotConfig.GATE_OPEN) < 0.001;
+    }
+
+    /** Return the last commanded servo position */
+    public double getPosition() {
+        return servo.getPosition();
+    }
+
+    /** Return whether the gate is commanded open */
+    public boolean isOpen() {
+        return open;
+    }
 }
 
 
-
-/**
+/*
 package org.firstinspires.ftc.teamcode.subsystems;
 
 

@@ -1,97 +1,49 @@
 package org.firstinspires.ftc.teamcode.autonomous;
 
-import com.pedropathing.api.PoseFactory;
+import static com.pedropathing.api.Paths.line;
+
 import com.pedropathing.math.Pose;
 import com.pedropathing.paths.Path;
 
-import static com.pedropathing.api.Paths.curve;
-import static com.pedropathing.api.Paths.line;
+import org.firstinspires.ftc.teamcode.config.RobotConfig;
+
 
 /**
- * Pedro 3 path definitions.
- *
- * Design the BASE route as BLUE + LEFT in the Visualizer.
- * RIGHT reflects that route across the field's vertical center line.
- * RED rotates the resulting route 180 degrees around field center.
- *
- * The transformations assume field symmetry and the coordinate bounds below.
- * Check these assumptions against your season's field and the Visualizer.
+ * Four competition start poses are deliberately UNCALIBRATED.
+ * Fill in measured field x, y (inches), heading (radians) before setting
+ * RobotConfig.AUTO_FIELD_POSES_VERIFIED = true.
+ * Until then only robot-relative drive TEST routines are supported.
  */
 public final class AutoPaths {
+    private AutoPaths() {}
 
-    // IMPORTANT: Use the same coordinate bounds as your Visualizer.
-    // Common FTC Pedro coordinates use 0..144 inches on each axis.
-    private static final double FIELD_MAX_X = 144.0;
-    private static final double FIELD_MAX_Y = 144.0;
+    // Placeholder. DO NOT treat these as field coordinates.
+    public static final Pose BLUE_AUDIENCE_START = Pose.zero();
+    public static final Pose BLUE_OPPOSITE_START = Pose.zero();
+    public static final Pose RED_AUDIENCE_START = Pose.zero();
+    public static final Pose RED_OPPOSITE_START = Pose.zero();
 
-    private static final PoseFactory DEGREES = PoseFactory.degrees();
-
-    private AutoPaths() {
-        // Utility class; do not instantiate.
+    public static Pose selectedStart(AutoRoutineConfig cfg) {
+        if (cfg.alliance == AutoRoutineConfig.Alliance.BLUE)
+            return cfg.side == AutoRoutineConfig.StartSide.AUDIENCE
+                ? BLUE_AUDIENCE_START : BLUE_OPPOSITE_START;
+        return cfg.side == AutoRoutineConfig.StartSide.AUDIENCE
+            ? RED_AUDIENCE_START : RED_OPPOSITE_START;
     }
 
-    /** One start pose and two consecutive autonomous path stages. */
-    public static final class Route {
-        public final Pose startPose;
-        public final Path toLaunch;
-        public final Path toPark;
-
-        public Route(Pose startPose, Path toLaunch, Path toPark) {
-            this.startPose = startPose;
-            this.toLaunch = toLaunch;
-            this.toPark = toPark;
-        }
+    public static Pose testStart() { return Pose.zero(); }
+    public static Path testForward() {
+        return line(Pose.zero(), new Pose(RobotConfig.AUTO_TEST_FORWARD_INCHES, 0, 0)).constant(0);
     }
 
-    /**
-     * Applies SIDE reflection first, then ALLIANCE rotation.
-     * Angle input is in degrees; the resulting Pose stores radians.
-     */
-    private static Pose pose(
-            AutoRoutineConfig config,
-            double x,
-            double y,
-            double headingDegrees) {
-
-        if (config.launchSide == AutoRoutineConfig.LaunchSide.RIGHT) {
-            x = FIELD_MAX_X - x;
-            headingDegrees = 180.0 - headingDegrees;
-        }
-
-        if (config.alliance == AutoRoutineConfig.Alliance.RED) {
-            x = FIELD_MAX_X - x;
-            y = FIELD_MAX_Y - y;
-            headingDegrees += 180.0;
-        }
-
-        headingDegrees = ((headingDegrees % 360.0) + 360.0) % 360.0;
-        return DEGREES.of(x, y, headingDegrees);
-    }
-
-    public static Route build(AutoRoutineConfig config) {
-
-        // ============================================================
-        // PASTE VISUALIZER PATH HERE - PART 1: BLUE / LEFT POSES
-        // Replace ALL example coordinates with your own Visualizer poses.
-        // Keep using pose(config, x, y, headingDegrees) for each one.
-        // ============================================================
-        Pose start   = pose(config, 24, 24, 0);
-        Pose control = pose(config, 35, 40, 45);
-        Pose launch  = pose(config, 48, 48, 90);
-        Pose park    = pose(config, 60, 48, 90);
-
-        // ============================================================
-        // PASTE VISUALIZER PATH HERE - PART 2: BLUE / LEFT PATHS
-        // Replace these two sample paths with your exported geometry.
-        // Use curve(start, control, launch), line(start, launch), etc.
-        // Keep the .linear(...) heading method (or your exported one).
-        // ============================================================
-        Path toLaunch = curve(start, control, launch)
-                .linear(start, launch);
-
-        Path toPark = line(launch, park)
-                .linear(launch, park);
-
-        return new Route(start, toLaunch, toPark);
+    /** Robot-relative test. Not a BIOBUZZ park, target, or mirrored alliance path. */
+    public static Path selectedFieldTest(AutoRoutineConfig cfg) {
+        if (!RobotConfig.AUTO_FIELD_POSES_VERIFIED)
+            throw new IllegalStateException("Field starting poses have not been verified");
+        Pose start = selectedStart(cfg);
+        double d = RobotConfig.AUTO_TEST_FORWARD_INCHES;
+        Pose end = new Pose(start.x() + d * Math.cos(start.heading()),
+                            start.y() + d * Math.sin(start.heading()), start.heading());
+        return line(start, end).constant(start.heading());
     }
 }

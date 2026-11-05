@@ -2,7 +2,6 @@ package org.firstinspires.ftc.teamcode.subsystems;
 
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
@@ -14,7 +13,7 @@ B to push artifact into launcher
 X to pull artifact out of launcher
 A to fire artifact
 */
-@TeleOp(name = "Android Mecanum Drive")
+// @TeleOp(name = "Android Mecanum Drive")
 public class AndroidMecanumDrive extends LinearOpMode {
     // private DcMotor intake;
     @Override

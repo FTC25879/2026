@@ -29,11 +29,7 @@ public final class Intake {
     public double getPower() { return commandedPower; }
 }
 
-
 /**
-
-
-
 package org.firstinspires.ftc.teamcode.subsystems;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
