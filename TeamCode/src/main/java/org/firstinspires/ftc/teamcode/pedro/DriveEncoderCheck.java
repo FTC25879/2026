@@ -3,13 +3,13 @@ package org.firstinspires.ftc.teamcode.pedro;
 import com.pedropathing.drivetrain.DrivePowers;
 import com.pedropathing.revhub.drivetrains.Mecanum;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
+
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 /** Slow driver-controlled test for calibrating encoder ticks/inch. */
-@TeleOp(name = "Pedro 3 - Drive Encoder Check", group = "Diagnostics")
+//@TeleOp(name = "Pedro 3 - Drive Encoder Check", group = "Diagnostics")
 public class DriveEncoderCheck extends LinearOpMode {
     @Override
     public void runOpMode() throws InterruptedException {

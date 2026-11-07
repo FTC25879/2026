@@ -1,7 +1,7 @@
 package org.firstinspires.ftc.teamcode.TeleOp;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+
 import org.firstinspires.ftc.teamcode.Robot;
 
 /**
@@ -10,7 +10,7 @@ import org.firstinspires.ftc.teamcode.Robot;
  * G2: RT = intake forward, LT = intake reverse (optional 'intake' hardware name).
  * Does not run automatic shot sequencing or RPM closed-loop logic.
  */
-@TeleOp(name = "25879 Competition TeleOp", group = "Competition")
+//@TeleOp(name = "25879 Competition TeleOp", group = "Competition")
 public final class CompetitionTeleOp extends LinearOpMode {
 
     @Override

@@ -126,7 +126,7 @@ public class AutoShooter extends LinearOpMode {
             telemetry.addData("Shooter target", "%.0f RPM", targetRPM);
             telemetry.addLine("DPAD LEFT/RIGHT: first forward -1/+1 inch");
             telemetry.addLine("DPAD DOWN/UP: shooter RPM -10/+10");
-            telemetry.addLine("Path: forward, 5 shots, left 26, forward, left 20");
+            telemetry.addLine("Path: forward, shots with intake activation, left, forward, left");
             telemetry.addLine("Check motor encoder connections before START");
             telemetry.update();
             sleep(30);

@@ -29,7 +29,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
  * encoder cable and a bare HD Hex motor with 28 counts/motor revolution.
  * Motor power is limited to 100%; an unreachable RPM cannot be guaranteed.
  */
-@TeleOp(name = "Android New Mecanum Drive")
+@TeleOp(name = "25879 - Competition TeleOp Single")
 public class AndroidNewMecanumDrive extends LinearOpMode {
 
     // ---------- Hardware: names must match Robot Configuration ----------
@@ -385,13 +385,19 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
             ballPusher.setPower(0.0);
         }
 
-        // Gate will NOT fire when shooter is OFF or the RPM is unsettled.
-        // A new Y press is required after RPM becomes READY.
+        // =====================================
+        // GATE - MANUAL CONTROL, NO RPM CHECK
+        // =====================================
+
+        // Either gamepad can operate the gate
         boolean y = gamepad1.y;
-        if (y && !lastY && rpmReady) gatePushing = true;
-        if (!y) gatePushing = false;
-        gate.setPosition(gatePushing ? GATE_OPEN : GATE_CLOSED);
-        lastY = y;
+
+        // Open while Y is held, close when released
+        gatePushing = y;
+
+        gate.setPosition(
+                gatePushing ? GATE_OPEN : GATE_CLOSED
+        );
     }
 
     private void updateDrive() {

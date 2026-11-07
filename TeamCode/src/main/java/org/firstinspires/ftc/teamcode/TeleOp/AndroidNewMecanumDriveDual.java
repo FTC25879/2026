@@ -31,7 +31,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
  * encoder cable and a bare HD Hex motor with 28 counts/motor revolution.
  * Motor power is limited to 100%; an unreachable RPM cannot be guaranteed.
  */
-@TeleOp(name = "Android New Mecanum Drive Dual")
+@TeleOp(name = "25879 - Competition TeleOp Dual")
 public class AndroidNewMecanumDriveDual extends LinearOpMode {
 
     // ---------- Hardware: names must match Robot Configuration ----------

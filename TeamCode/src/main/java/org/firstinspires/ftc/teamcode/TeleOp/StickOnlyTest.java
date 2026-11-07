@@ -1,7 +1,6 @@
 package org.firstinspires.ftc.teamcode.TeleOp;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.Range;
 
@@ -11,7 +10,7 @@ import com.qualcomm.robotcore.util.Range;
  * Configure "stick" as Servo at Expansion Hub servo port 5.
  * With linkage disconnected, test a limited travel range first.
  */
-@TeleOp(name = "25879 Stick ONLY Test", group = "Diagnostics")
+//@TeleOp(name = "25879 Stick ONLY Test", group = "Diagnostics")
 public class StickOnlyTest extends LinearOpMode {
     private static final double CENTER = 0.50;
     private static final double TEST_EXTENDED = 0.60;

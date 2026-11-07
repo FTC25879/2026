@@ -1,12 +1,11 @@
 package org.firstinspires.ftc.teamcode.TeleOp;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.Servo;
 
 /** Zero-motion hardware map checks. Doesn't power any motor or servo. */
-@TeleOp(name = "25879 TEST - Hardware Map", group = "Testing")
+//@TeleOp(name = "25879 TEST - Hardware Map", group = "Testing")
 public final class HardwareMapCheck extends LinearOpMode {
     @Override
     public void runOpMode() throws InterruptedException {

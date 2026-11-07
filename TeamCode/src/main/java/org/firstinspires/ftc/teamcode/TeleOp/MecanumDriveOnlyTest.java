@@ -1,11 +1,11 @@
 package org.firstinspires.ftc.teamcode.TeleOp;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+
 import org.firstinspires.ftc.teamcode.subsystems.WorkingMecanumDrive;
 
 /** Drive-only verification: requires JUST the four configured mecanum motors. */
-@TeleOp(name = "25879 TEST - Drive Only", group = "Testing")
+//@TeleOp(name = "25879 TEST - Drive Only", group = "Testing")
 public final class MecanumDriveOnlyTest extends LinearOpMode {
     @Override
     public void runOpMode() throws InterruptedException {
