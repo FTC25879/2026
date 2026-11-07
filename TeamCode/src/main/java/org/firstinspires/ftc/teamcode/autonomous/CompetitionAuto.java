@@ -2,9 +2,9 @@ package org.firstinspires.ftc.teamcode.autonomous;
 
 import com.pedropathing.drivetrain.DrivePowers;
 import com.pedropathing.follower.Follower;
-import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
+
 import org.firstinspires.ftc.teamcode.Robot;
 import org.firstinspires.ftc.teamcode.config.RobotConfig;
 import org.firstinspires.ftc.teamcode.pedro.Constants;
@@ -15,7 +15,7 @@ import org.firstinspires.ftc.teamcode.util.TelemetryManager;
  * Defaults to a short, slow timed forward drive. Shooter and Pedro require explicit
  * RobotConfig enable flags and Driver Station INIT selection.
  */
-@Autonomous(name = "25879 Competition Auto (TEST)", group = "Competition")
+//@Autonomous(name = "25879 Competition Auto (TEST)", group = "Competition")
 public final class CompetitionAuto extends LinearOpMode {
     private enum Step { WAIT_SHOOTER, FEED, BEGIN_MOVE, MOVING, DONE }
     private final ElapsedTime stage = new ElapsedTime();

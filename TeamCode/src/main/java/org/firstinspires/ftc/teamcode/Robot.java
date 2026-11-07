@@ -10,41 +10,78 @@ import org.firstinspires.ftc.teamcode.pedro.Constants;
 import org.firstinspires.ftc.teamcode.subsystems.FlowerStick;
 import org.firstinspires.ftc.teamcode.subsystems.Gate;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
+import org.firstinspires.ftc.teamcode.subsystems.OriginalControlMechanisms;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 import org.firstinspires.ftc.teamcode.subsystems.ShotSequencer;
+import org.firstinspires.ftc.teamcode.subsystems.WorkingMecanumDrive;
 
-/** Robot's shared subsystems. Both autonomous and TeleOp use the same methods. */
+/**
+ * Scaffolding facade. Two deliberately SEPARATE hardware ownership modes:
+ *  - Robot(hardwareMap): unchanged Pedro Auto + advanced mechanisms.
+ *  - Robot(hardwareMap, true): tested manual mecanum and original A/X/Y devices.
+ * The advanced and manual mechanism fields are mutually exclusive so that
+ * they cannot issue competing power/servo commands.
+ */
 public final class Robot {
-    public final Mecanum drive;
-    public final Intake intake;
-    public final Shooter shooter;
-    public final Gate gate;
-    public final FlowerStick stick;
-    public final ShotSequencer shots;
+    public final Mecanum drive; // Pedro Auto only
+    public final WorkingMecanumDrive manualDrive; // manual TeleOp only
+    public final OriginalControlMechanisms manualMechanisms; // manual TeleOp only
+
+    public final Intake intake; // original advanced/Auto only
+    public final Shooter shooter; // original advanced/Auto only
+    public final Gate gate; // original advanced/Auto only
+    public final FlowerStick stick; // original advanced/Auto only
+    public final ShotSequencer shots; // original advanced/Auto only
+
     private final HardwareMap map;
     private final IMU imu;
 
     public Robot(HardwareMap hardwareMap) {
-        map = hardwareMap;
-        drive = new Mecanum(map, Constants.drivetrainConfig);
-        imu = map.get(IMU.class, RobotConfig.IMU);
-        imu.initialize(new IMU.Parameters(RobotConfig.HUB_ORIENTATION));
-        intake = new Intake(map);
-        shooter = new Shooter(map);
-        gate = new Gate(map);
-        stick = new FlowerStick(map);
-        shots = new ShotSequencer(gate, shooter);
+        this(hardwareMap, false);
     }
 
+    public Robot(HardwareMap hardwareMap, boolean useOriginalManualControls) {
+        map = hardwareMap;
+
+        if (useOriginalManualControls) {
+            // Do not initialize Pedro, the IMU, or the advanced shooter/gate/stick
+            // classes; each might overwrite a known-working motor/servo command.
+            drive = null;
+            imu = null;
+            manualDrive = new WorkingMecanumDrive(map);
+            manualMechanisms = new OriginalControlMechanisms(map);
+            intake = null;
+            shooter = null;
+            gate = null;
+            stick = null;
+            shots = null;
+        } else {
+            manualDrive = null;
+            manualMechanisms = null;
+            drive = new Mecanum(map, Constants.drivetrainConfig);
+            imu = map.get(IMU.class, RobotConfig.IMU);
+            imu.initialize(new IMU.Parameters(RobotConfig.HUB_ORIENTATION));
+            intake = new Intake(map);
+            shooter = new Shooter(map);
+            gate = new Gate(map);
+            stick = new FlowerStick(map);
+            shots = new ShotSequencer(gate, shooter);
+        }
+    }
+
+    public boolean hasIMU() { return imu != null; }
     public double headingRadians() {
-        return imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
+        return imu == null ? 0.0
+            : imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
     }
     public double headingDegrees() {
-        return imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
+        return imu == null ? 0.0
+            : imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
     }
-    public void resetHeading() { imu.resetYaw(); }
+    public void resetHeading() {
+        if (imu != null) imu.resetYaw();
+    }
 
-    /** Returns first valid battery voltage; -1 means unavailable. */
     public double voltage() {
         double result = Double.POSITIVE_INFINITY;
         for (VoltageSensor sensor : map.voltageSensor) {
@@ -54,18 +91,22 @@ public final class Robot {
         return Double.isInfinite(result) ? -1 : result;
     }
 
-    /** Call EVERY loop, including when the drivetrain is controlled by Pedro. */
+    /** Advanced/Auto update only. Original manual hardware is commanded in TeleOp. */
     public void update() {
-        shooter.update(voltage());
-        shots.update();
+        if (shooter != null && shots != null) {
+            shooter.update(voltage());
+            shots.update();
+        }
     }
 
     public void stopAll() {
-        shots.cancel();
-        intake.stop();
-        shooter.stop();
-        gate.close();
-        stick.retract();
-        drive.stop();
+        if (manualMechanisms != null) manualMechanisms.stop();
+        if (manualDrive != null) manualDrive.stop();
+        if (shots != null) shots.cancel();
+        if (intake != null) intake.stop();
+        if (shooter != null) shooter.stop();
+        if (gate != null) gate.close();
+        if (stick != null) stick.retract();
+        if (drive != null) drive.stop();
     }
 }

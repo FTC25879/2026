@@ -1,85 +1,48 @@
 package org.firstinspires.ftc.teamcode.TeleOp;
 
-import com.pedropathing.drivetrain.DrivePowers;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.Gamepad;
 import org.firstinspires.ftc.teamcode.Robot;
-import org.firstinspires.ftc.teamcode.config.RobotConfig;
-import org.firstinspires.ftc.teamcode.control.HeadingAim;
-import org.firstinspires.ftc.teamcode.util.TelemetryManager;
 
 /**
- * Competition driver mode. One gamepad mode can be selected BEFORE Start with G1 X.
- * G1: drive, left bumper locks current heading, right bumper precision drive.
- * G2 (or G1 single-mode): right/left triggers intake/reverse, Y toggles stick,
- * A request one shot, D-pad U/D target RPM +/-10, D-pad R start, L stop, X fault reset (only stopped).
+ * Verified legacy A/X/Y bindings alongside the tested robot-centric mecanum.
+ * G1: sticks = drive, triggers = drive scaling, A = shooter, X = pusher, Y = servo.
+ * G2: RT = intake forward, LT = intake reverse (optional 'intake' hardware name).
+ * Does not run automatic shot sequencing or RPM closed-loop logic.
  */
 @TeleOp(name = "25879 Competition TeleOp", group = "Competition")
 public final class CompetitionTeleOp extends LinearOpMode {
 
     @Override
     public void runOpMode() throws InterruptedException {
-        Robot robot = new Robot(hardwareMap);
-        HeadingAim headingAim = new HeadingAim();
-        boolean singleController = false;
-        boolean lastSetupX = false;
-        boolean lastAim = false;
-        boolean lastUp = false, lastDown = false, lastA = false;
-        boolean lastRight = false, lastLeft = false, lastX = false;
-
+        // Manual mode maps only hardware confirmed in the working OnMecanumDrive.
+        Robot robot = new Robot(hardwareMap, true);
         try {
-            while (!isStarted() && !isStopRequested()) {
-                boolean x = gamepad1.x;
-                if (x && !lastSetupX) singleController = !singleController;
-                lastSetupX = x;
-                telemetry.addLine("25879 - COMPETITION TELEOP");
-                telemetry.addData("Controllers", singleController ? "ONE (G1 drives + mechanisms)" : "TWO (G1 drive, G2 mechanisms)");
-                telemetry.addLine("G1 X toggles one/two controller mode before START");
-                telemetry.addLine("Verify servo positions, shooter ticks/rev and current limits before shooting!");
-                telemetry.update();
-                sleep(50);
-            }
+            telemetry.addLine("25879 - ORIGINAL CONTROLS + MECANUM");
+            telemetry.addLine("G1 sticks = drive; LT/RT = scale drive/turn");
+            telemetry.addLine("G1 hold A = shooter; hold X = ballPusher");
+            telemetry.addLine("G1 hold Y = servo0 0.50; release = 0.189");
+            telemetry.addLine("G2 RT/LT = intake forward/reverse (optional)");
+            telemetry.addData("Intake found", robot.manualMechanisms.hasIntake());
+            telemetry.addData("Intake hardware name", robot.manualMechanisms.intakeName());
+            telemetry.addLine("Full-power shooter/pusher: test with mechanisms clear.");
+            telemetry.update();
+
+            waitForStart();
             if (isStopRequested()) return;
-            headingAim.capture(robot.headingRadians());
 
             while (opModeIsActive()) {
-                Gamepad mechanism = singleController ? gamepad1 : gamepad2;
+                robot.manualDrive.drive(gamepad1);
+                robot.manualMechanisms.update(gamepad1, gamepad2);
 
-                // Drive. Left bumper holds the heading captured on its first press.
-                boolean aim = gamepad1.left_bumper;
-                if (aim && !lastAim) headingAim.capture(robot.headingRadians());
-                lastAim = aim;
-                double forward = -gamepad1.left_stick_y;
-                double strafe = -gamepad1.left_stick_x;
-                double turn = aim ? headingAim.getTurn(robot.headingRadians()) : -gamepad1.right_stick_x;
-                double speed = gamepad1.right_bumper ? 0.28 : 0.78;
-                robot.drive.drive(new DrivePowers(forward * speed, strafe * speed, turn * speed), true);
-
-                // Intake only runs while a trigger is being held.
-                if (mechanism.right_trigger > 0.2 && mechanism.left_trigger <= 0.2) robot.intake.start();
-                else if (mechanism.left_trigger > 0.2 && mechanism.right_trigger <= 0.2) robot.intake.reverse();
-                else robot.intake.stop();
-
-                boolean up = mechanism.dpad_up, down = mechanism.dpad_down;
-                boolean right = mechanism.dpad_right, left = mechanism.dpad_left;
-                boolean a = mechanism.a, x = mechanism.x;
-                if (up && !lastUp) robot.shooter.adjustRPM(RobotConfig.SHOOTER_STEP_RPM);
-                if (down && !lastDown) robot.shooter.adjustRPM(-RobotConfig.SHOOTER_STEP_RPM);
-                if (right && !lastRight) robot.shooter.start();
-                if (left && !lastLeft) { robot.shots.cancel(); robot.shooter.stop(); }
-                if (a && !lastA) robot.shots.requestOne();
-                // X only clears a latched fault when motor is stopped. Start with D-pad right.
-                if (x && !lastX && !robot.shooter.isEnabled()) robot.shooter.clearFault();
-                lastUp = up; lastDown = down; lastRight = right; lastLeft = left;
-                lastA = a; lastX = x;
-
-                robot.stick.update(mechanism); // Y toggles, includes key-edge detection
-                robot.update();
-                TelemetryManager.addRobot(telemetry, robot);
-                telemetry.addData("Control mode", singleController ? "ONE" : "TWO");
-                telemetry.addLine("R/L triggers intake | D-pad U/D RPM | R start | L stop");
-                telemetry.addLine("A feed one | Y stick | X clear stopped fault");
+                telemetry.addData("G1 Shooter A", gamepad1.a ? "ON 1.0" : "OFF");
+                telemetry.addData("G1 Pusher X", gamepad1.x ? "ON 1.0" : "OFF");
+                telemetry.addData("G1 Servo Y", gamepad1.y ? "0.50 command" : "0.189 after release");
+                telemetry.addData("Servo command", "%.3f", robot.manualMechanisms.servoCommand());
+                telemetry.addData("Intake found", robot.manualMechanisms.hasIntake());
+                telemetry.addData("G2 intake command", "%.2f", robot.manualMechanisms.intakePower());
+                telemetry.addData("Battery (V)", "%.2f", robot.voltage());
+                telemetry.addLine("G1 triggers scale drive; G2 triggers control intake.");
                 telemetry.update();
                 idle();
             }
