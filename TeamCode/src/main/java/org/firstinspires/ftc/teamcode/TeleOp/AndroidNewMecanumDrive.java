@@ -16,11 +16,11 @@ import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
  *
  * All controls are shown on the main Driver Hub telemetry page.
  * A: shooter ON/OFF toggle                 B: stick OPEN/CLOSED toggle
- * X: forward intake ON/OFF toggle         Y: gate push (hold, RPM-ready only)
- * D-pad LEFT: reverse intake ON/OFF toggle
+ * X: forward intake WHILE HELD            Y: gate push (manual hold)
+ * D-pad LEFT: reverse intake WHILE HELD
  * D-pad UP/DOWN: shooter target +/-10 REAL RPM (feedback control)
  * D-pad RIGHT: unassigned                 LB: match/diagnostics pages
- * Intake runs for a maximum of 10 seconds per activation (either direction).
+ * Intake runs for a maximum of 10 seconds continuously (either direction).
  * Left stick: drive/strafe                 Right stick: turn
  * LT: precision drive                     RT: precision turn
  *
@@ -91,15 +91,16 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
     private static final double INTAKE_TIMEOUT_S = 10.0;
     private static final double INTAKE_REVERSE_PAUSE_S = 0.15;
     private IntakeMode intakeMode = IntakeMode.OFF;
+    private IntakeMode lastIntakeDirection = IntakeMode.OFF;
     private boolean intakeTimedOut = false;
     private boolean intakeReversalPending = false;
     private final ElapsedTime intakeTimer = new ElapsedTime();
     private final ElapsedTime reversalTimer = new ElapsedTime();
 
     // ---------- Gamepad button edges ----------
-    private boolean lastA = false, lastB = false, lastX = false;
-    private boolean lastY = false, lastUp = false, lastDown = false;
-    private boolean lastLeft = false, lastLB = false;
+    private boolean lastA = false, lastB = false;
+    private boolean lastUp = false, lastDown = false;
+    private boolean lastLB = false;
 
     // ---------- Driver Station ----------
     private static final double LOW_BATTERY_V = 11.5;
@@ -180,33 +181,26 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         }
         lastA = a;
 
-        // X toggles forward intake, D-pad LEFT toggles reverse.
-        // Starting either direction stops the other and starts a fresh 10s timer.
+        // INTAKE: BOTH controls are HOLD, never toggle.
+        // Releasing both stops immediately. Pressing both also stops.
+        // After the 10-second cutoff, release BOTH controls before restarting.
+        boolean xHeld = gamepad1.x;
+        boolean reverseHeld = gamepad1.dpad_left;
 
-        boolean x = gamepad1.x;
-        boolean left = gamepad1.dpad_left;
+        IntakeMode requested = IntakeMode.OFF;
+        if (xHeld && !reverseHeld) requested = IntakeMode.FORWARD;
+        if (reverseHeld && !xHeld) requested = IntakeMode.REVERSE;
 
-// X = Forward intake toggle (unchanged)
-        if (x && !lastX && !left) {
-            toggleIntake(IntakeMode.FORWARD);
+        if (!xHeld && !reverseHeld) {
+            intakeTimedOut = false; // Re-arm only after full release.
         }
 
-// D-pad LEFT = Reverse intake while held
-        if (left && !lastLeft) {
-            if (intakeMode != IntakeMode.REVERSE) {
-                toggleIntake(IntakeMode.REVERSE);
-            }
-        }
-
-// Release D-pad LEFT = Stop reverse intake
-        if (!left && lastLeft && intakeMode == IntakeMode.REVERSE) {
+        if (requested == IntakeMode.OFF || intakeTimedOut) {
             intakeMode = IntakeMode.OFF;
             intakeReversalPending = false;
+        } else if (requested != intakeMode) {
+            startIntake(requested);
         }
-
-        lastX = x;
-        lastLeft = left;
-
 
         boolean b = gamepad1.b;
         if (b && !lastB) {
@@ -233,20 +227,14 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         lastLB = lb;
     }
 
-    private void toggleIntake(IntakeMode selectedMode) {
-        if (intakeMode == selectedMode) {
-            // Same direction pressed again: stop intake.
-            intakeMode = IntakeMode.OFF;
-            intakeReversalPending = false;
-        } else {
-            // Avoid instantly changing a moving motor from full forward
-            // to full reverse (or vice versa): coast at zero for 150 ms.
-            intakeReversalPending = intakeMode != IntakeMode.OFF;
-            if (intakeReversalPending) reversalTimer.reset();
-            intakeMode = selectedMode;
-            intakeTimer.reset();
-        }
-        intakeTimedOut = false;
+    private void startIntake(IntakeMode direction) {
+        // Pause 150ms if changing from the last powered direction.
+        intakeReversalPending = lastIntakeDirection != IntakeMode.OFF
+                && lastIntakeDirection != direction;
+        if (intakeReversalPending) reversalTimer.reset();
+        intakeMode = direction;
+        lastIntakeDirection = direction;
+        intakeTimer.reset();
     }
 
     private String intakeStatusText() {
@@ -264,7 +252,7 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
     }
 
     private void resetReadiness() {
-        // A new shooter speed invalidates any gate authorization.
+        // A new shooter speed invalidates RPM readiness indication.
         gatePushing = false;
         if (gate != null) gate.setPosition(GATE_CLOSED);
         rpmInRange = false;
@@ -505,10 +493,10 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         telemetry.addLine(color("<b>GAMEPAD 1 - ALL COMMANDS</b>", "#55BBFF"));
         telemetry.addLine("L STICK MOVE/STRAFE | R STICK TURN | LT/RT SLOW");
         telemetry.addLine("A SHOOT TOGGLE  | B STICK TOGGLE");
-        telemetry.addLine("X INTAKE FWD TOGGLE | DPAD LEFT REVERSE TOGGLE");
-        telemetry.addLine("Y GATE HOLD (RPM READY ONLY)");
+        telemetry.addLine("HOLD X INTAKE FWD | HOLD DPAD LEFT INTAKE REV");
+        telemetry.addLine("Y GATE HOLD (INDEPENDENT OF RPM)");
         telemetry.addLine("DPAD UP +10 / DOWN -10 RPM | RIGHT UNUSED");
-        telemetry.addLine("INTAKE AUTO STOPS AT 10s | LB DETAILS");
+        telemetry.addLine("INTAKE MAX 10s (RELEASE TO REARM) | LB DETAILS");
     }
 
     private String status(boolean enabled, String yes, String no) {

@@ -16,15 +16,16 @@ import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
  *
  * All controls are shown on the main Driver Hub telemetry page.
  * A: shooter ON/OFF toggle                 B: stick OPEN/CLOSED toggle
- * X: forward intake ON/OFF toggle         Y: gate push (hold, RPM-ready only)
+ * X: forward intake while held           Y: gate push while held (any RPM)
  * BOTH GAMEPADS: identical controls. Gamepad 1 has priority for driving
  * when its joysticks are active; otherwise Gamepad 2 can drive.
- * D-pad LEFT: hold for reverse intake (release stops it)
+ * D-pad LEFT: reverse intake while held (release stops it)
  * D-pad UP/DOWN: shooter target +/-10 REAL RPM (feedback control)
  * D-pad RIGHT: unassigned                 LB: match/diagnostics pages
  * Intake runs for a maximum of 10 seconds per activation (either direction).
  * Left stick: drive/strafe                 Right stick: turn
  * LT: precision drive                     RT: precision turn
+ * Only B toggles the stick; no rear triggers/bumpers operate the stick.
  *
  * Uses the EXISTING WORKING RUN_WITHOUT_ENCODER shooter mode, adding
  * software PI feedback via DcMotorEx.getVelocity(). Requires a working
@@ -99,13 +100,15 @@ public class AndroidNewMecanumDriveDual extends LinearOpMode {
     private IntakeMode intakeMode = IntakeMode.OFF;
     private boolean intakeTimedOut = false;
     private boolean intakeReversalPending = false;
+    private boolean intakeRequireRelease = false; // Lock out after 10-second timeout.
+    private IntakeMode lastIntakeDirection = IntakeMode.OFF;
     private final ElapsedTime intakeTimer = new ElapsedTime();
     private final ElapsedTime reversalTimer = new ElapsedTime();
 
     // ---------- Independent button edges for BOTH gamepads ----------
-    private boolean lastA1, lastA2, lastB1, lastB2, lastX1, lastX2;
+    private boolean lastA1, lastA2, lastB1, lastB2;
     private boolean lastY1, lastY2, lastUp1, lastUp2, lastDown1, lastDown2;
-    private boolean lastLeft, lastLB1, lastLB2;
+    private boolean lastLB1, lastLB2;
 
     // ---------- Driver Station ----------
     private static final double LOW_BATTERY_V = 11.5;
@@ -197,24 +200,23 @@ public class AndroidNewMecanumDriveDual extends LinearOpMode {
         lastB1 = gamepad1.b;
         lastB2 = gamepad2.b;
 
-        // X: toggle forward intake from EITHER gamepad.
-        // D-pad LEFT: hold to reverse. Release of both buttons stops reverse.
-        // Reverse never auto-restarts if the 10-second timer expires while held.
-        boolean xPressed = (gamepad1.x && !lastX1) || (gamepad2.x && !lastX2);
+        // Both gamepads: X = forward HOLD, D-pad LEFT = reverse HOLD.
+        // Releasing both buttons stops intake. Opposite inputs cancel out.
+        // After 10 seconds, both buttons must be released before restarting.
+        boolean forwardHeld = gamepad1.x || gamepad2.x;
         boolean reverseHeld = gamepad1.dpad_left || gamepad2.dpad_left;
 
-        if (reverseHeld && !lastLeft) {
-            selectIntake(IntakeMode.REVERSE);
-        } else if (!reverseHeld && lastLeft && intakeMode == IntakeMode.REVERSE) {
+        if (!forwardHeld && !reverseHeld) {
             intakeMode = IntakeMode.OFF;
             intakeReversalPending = false;
+            intakeRequireRelease = false;
+        } else if (intakeRequireRelease || (forwardHeld && reverseHeld)) {
+            intakeMode = IntakeMode.OFF;
+            intakeReversalPending = false;
+        } else {
+            IntakeMode requested = forwardHeld ? IntakeMode.FORWARD : IntakeMode.REVERSE;
+            if (intakeMode != requested) selectIntake(requested);
         }
-        if (xPressed && !reverseHeld) {
-            toggleIntake(IntakeMode.FORWARD);
-        }
-        lastX1 = gamepad1.x;
-        lastX2 = gamepad2.x;
-        lastLeft = reverseHeld;
 
         boolean up = gamepad1.dpad_up || gamepad2.dpad_up;
         boolean down = gamepad1.dpad_down || gamepad2.dpad_down;
@@ -242,28 +244,13 @@ public class AndroidNewMecanumDriveDual extends LinearOpMode {
     }
 
     private void selectIntake(IntakeMode selectedMode) {
-        if (intakeMode != selectedMode) {
-            intakeReversalPending = intakeMode != IntakeMode.OFF;
-            if (intakeReversalPending) reversalTimer.reset();
-            intakeMode = selectedMode;
-            intakeTimer.reset();
-        }
-        intakeTimedOut = false;
-    }
-
-    private void toggleIntake(IntakeMode selectedMode) {
-        if (intakeMode == selectedMode) {
-            // Pressing X again stops the forward intake.
-            intakeMode = IntakeMode.OFF;
-            intakeReversalPending = false;
-        } else {
-            // Avoid instantly changing a moving motor from full forward
-            // to full reverse (or vice versa): coast at zero for 150 ms.
-            intakeReversalPending = intakeMode != IntakeMode.OFF;
-            if (intakeReversalPending) reversalTimer.reset();
-            intakeMode = selectedMode;
-            intakeTimer.reset();
-        }
+        // A direction change pauses motor power for 150 ms first.
+        intakeReversalPending = lastIntakeDirection != IntakeMode.OFF
+                && lastIntakeDirection != selectedMode;
+        if (intakeReversalPending) reversalTimer.reset();
+        intakeMode = selectedMode;
+        lastIntakeDirection = selectedMode;
+        intakeTimer.reset();
         intakeTimedOut = false;
     }
 
@@ -388,6 +375,7 @@ public class AndroidNewMecanumDriveDual extends LinearOpMode {
                 && intakeTimer.seconds() >= INTAKE_TIMEOUT_S) {
             intakeMode = IntakeMode.OFF;
             intakeTimedOut = true;
+            intakeRequireRelease = true;
             intakeReversalPending = false;
         }
         if (intakeReversalPending
@@ -409,14 +397,14 @@ public class AndroidNewMecanumDriveDual extends LinearOpMode {
         // =====================================
 
         // Either gamepad can operate the gate
-                boolean y = gamepad1.y || gamepad2.y;
+        boolean y = gamepad1.y || gamepad2.y;
 
         // Open while Y is held, close when released
-                gatePushing = y;
+        gatePushing = y;
 
-                gate.setPosition(
-                        gatePushing ? GATE_OPEN : GATE_CLOSED
-                );
+        gate.setPosition(
+                gatePushing ? GATE_OPEN : GATE_CLOSED
+        );
     }
 
     private void updateDrive() {
@@ -540,10 +528,10 @@ public class AndroidNewMecanumDriveDual extends LinearOpMode {
         telemetry.addLine(color("<b>GAMEPADS 1 &amp; 2 - SAME COMMANDS</b>", "#55BBFF"));
         telemetry.addLine("L STICK MOVE/STRAFE | R STICK TURN | LT/RT SLOW");
         telemetry.addLine("A SHOOT TOGGLE  | B STICK TOGGLE");
-        telemetry.addLine("X INTAKE FWD TOGGLE | DPAD LEFT REV HOLD");
-        telemetry.addLine("Y GATE HOLD (RPM READY ONLY)");
+        telemetry.addLine("X INTAKE FWD HOLD | DPAD LEFT REV HOLD");
+        telemetry.addLine("Y GATE HOLD (ANY RPM) | B STICK ONLY");
         telemetry.addLine("DPAD UP +10 / DOWN -10 RPM | RIGHT UNUSED");
-        telemetry.addLine("INTAKE 10s AUTO OFF | LB DETAILS | GP1 DRIVE PRIORITY");
+        telemetry.addLine("INTAKE 10s AUTO OFF / RELEASE TO RESET | LB DETAILS");
     }
 
     private String status(boolean enabled, String yes, String no) {
