@@ -583,5 +583,6 @@ public class AndroidNewMecanumDriveDual extends LinearOpMode {
         backRight.setPower(0);
         shooter.setPower(0);
         ballPusher.setPower(0);
+
     }
 }
