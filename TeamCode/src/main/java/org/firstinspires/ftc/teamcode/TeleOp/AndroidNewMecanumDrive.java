@@ -12,33 +12,23 @@ import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 
 /**
- * HELIX HYDRAULICS #25879 - full mecanum TeleOp / Driver Hub dashboard.
- *
- * All controls are shown on the main Driver Hub telemetry page.
- * A: shooter ON/OFF toggle                 B: stick OPEN/CLOSED toggle
- * X: forward intake WHILE HELD            Y: gate push (manual hold)
- * D-pad LEFT: reverse intake WHILE HELD
- * D-pad UP/DOWN: shooter target +/-10 REAL RPM (feedback control)
- * D-pad RIGHT: unassigned                 LB: match/diagnostics pages
- * Intake runs for a maximum of 10 seconds continuously (either direction).
- * Left stick: drive/strafe                 Right stick: turn
- * LT: precision drive                     RT: precision turn
- *
- * Uses the EXISTING WORKING RUN_WITHOUT_ENCODER shooter mode, adding
- * software PI feedback via DcMotorEx.getVelocity(). Requires a working
- * encoder cable and a bare HD Hex motor with 28 counts/motor revolution.
- * Motor power is limited to 100%; an unreachable RPM cannot be guaranteed.
+ * HELIX HYDRAULICS #25879 - competition TeleOp.
+ * Updated shooter controller: lower integral windup, fast overspeed cutback.
+ * Intake X=forward hold, D-pad LEFT=reverse hold; timeout 10 seconds.
+ * A=shooter toggle, B=stick toggle, Y=manual gate hold (any RPM).
+ * D-pad UP/DOWN=target +/-10 RPM, LB=diagnostics.
+ * Left stick drive/strafe; right stick turn; LT/RT precision.
+ * Preserves RUN_WITHOUT_ENCODER and existing hardware names/directions.
+ * RPM conversion assumes 28 encoder ticks per motor revolution (1:1).
  */
 @TeleOp(name = "25879 - Competition TeleOp Single")
 public class AndroidNewMecanumDrive extends LinearOpMode {
-
-    // ---------- Hardware: names must match Robot Configuration ----------
     private DcMotor frontLeft, backLeft, frontRight, backRight;
     private DcMotorEx shooter;
     private DcMotor ballPusher;
     private Servo gate, stick;
 
-    // ---------- Shooter: feedback control starting from the working 55% ----------
+    // Shooter speed control. Adjust after measured on-robot testing.
     private static final double DEFAULT_TARGET_RPM = 2650.0;
     private static final double RPM_STEP = 10.0;
     private static final double MIN_TARGET_RPM = 0.0;
@@ -46,19 +36,20 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
     private static final double TICKS_PER_MOTOR_REV = 28.0;
     private static final double START_POWER = 0.55;
     private static final double NOMINAL_FREE_RPM = 6000.0;
-
-    // Initial PI gains (power per RPM; I is power per RPM-second).
-    // Adjust only after watching the measured response; tuning is robot-specific.
-    private static final double SHOOTER_KP = 0.00017;
-    private static final double SHOOTER_KI = 0.00030;
-    private static final double MAX_INTEGRAL = 0.55;
-    private static final double RPM_FILTER_ALPHA = 0.40;
+    private static final double SHOOTER_KP = 0.00020;
+    private static final double SHOOTER_KI_UP = 0.00006;
+    private static final double SHOOTER_KI_DOWN = 0.00025;
+    private static final double MAX_POSITIVE_INTEGRAL = 0.08;
+    private static final double MAX_NEGATIVE_INTEGRAL = 0.30;
+    private static final double RPM_FILTER_ALPHA = 0.55;
     private static final double CONTROL_PERIOD_S = 0.040;
     private static final double STARTUP_POWER_RAMP_PER_S = 0.60;
-
+    private static final double OVERSPEED_COAST_RPM = 130.0;
+    private static final double OVERSPEED_RESUME_RPM = 30.0;
     private static final double RPM_READY_BAND = 20.0;
     private static final double RPM_RAW_BAND = 50.0;
     private static final double RPM_READY_TIME_MS = 350.0;
+
     private double targetRPM = DEFAULT_TARGET_RPM;
     private double actualRPM = 0;
     private double filteredRPM = 0;
@@ -67,42 +58,38 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
     private boolean filterInitialized = false;
     private boolean shooterOn = false;
     private boolean shooterFault = false;
+    private boolean overspeedCoasting = false;
     private boolean rpmInRange = false;
     private boolean rpmReady = false;
     private final ElapsedTime controlTimer = new ElapsedTime();
     private final ElapsedTime spinupTimer = new ElapsedTime();
     private final ElapsedTime stableTimer = new ElapsedTime();
 
-    // ---------- Servos ----------
     private static final double GATE_CLOSED = 0.189;
     private static final double GATE_OPEN = 0.50;
-    // INVERTED from earlier .20 closed / .80 open (physical stick reversal).
     private static final double STICK_CLOSED = 0.80;
     private static final double STICK_OPEN = 0.20;
-    private boolean stickOpen = false; // Start physically CLOSED.
+    private boolean stickOpen = false;
     private boolean gatePushing = false;
 
-    // ---------- Drive ----------
     private static final double NORMAL_SPEED = 1.0;
     private static final double PRECISION_SPEED = 0.25;
+    private static final double DRIVE_DEADBAND = 0.08;
+    private int driveController = 1;
+    private boolean precisionDrive = false;
+    private boolean precisionTurn = false;
 
-    // ---------- Intake: direction selection with 10-second auto-stop ----------
     private enum IntakeMode { OFF, FORWARD, REVERSE }
     private static final double INTAKE_TIMEOUT_S = 10.0;
     private static final double INTAKE_REVERSE_PAUSE_S = 0.15;
     private IntakeMode intakeMode = IntakeMode.OFF;
-    private IntakeMode lastIntakeDirection = IntakeMode.OFF;
     private boolean intakeTimedOut = false;
+    private boolean intakeRequireRelease = false;
     private boolean intakeReversalPending = false;
     private final ElapsedTime intakeTimer = new ElapsedTime();
     private final ElapsedTime reversalTimer = new ElapsedTime();
 
-    // ---------- Gamepad button edges ----------
-    private boolean lastA = false, lastB = false;
-    private boolean lastUp = false, lastDown = false;
-    private boolean lastLB = false;
-
-    // ---------- Driver Station ----------
+    private boolean lastA, lastB, lastUp, lastDown, lastLB;
     private static final double LOW_BATTERY_V = 11.5;
     private static final double CRITICAL_BATTERY_V = 11.0;
     private boolean detailsPage = false;
@@ -115,7 +102,6 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         showInitScreen();
         waitForStart();
         if (isStopRequested()) return;
-
         controlTimer.reset();
         screenTimer.reset();
         readyFlashTimer.reset();
@@ -145,21 +131,17 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         gate = hardwareMap.get(Servo.class, "gate");
         stick = hardwareMap.get(Servo.class, "stick");
 
-        // Preserve working drivetrain motor directions.
         backLeft.setDirection(DcMotor.Direction.FORWARD);
         frontLeft.setDirection(DcMotor.Direction.REVERSE);
         backRight.setDirection(DcMotor.Direction.FORWARD);
         frontRight.setDirection(DcMotor.Direction.FORWARD);
         shooter.setDirection(DcMotor.Direction.REVERSE);
-
-        // Preserve the working power mode. Encoder feedback is read separately.
         shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         shooter.setPower(0);
         ballPusher.setPower(0);
         gate.setPosition(GATE_CLOSED);
         stick.setPosition(STICK_CLOSED);
-
         telemetry.setDisplayFormat(Telemetry.DisplayFormat.HTML);
         telemetry.setMsTransmissionInterval(200);
     }
@@ -167,40 +149,16 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
     private void showInitScreen() {
         telemetry.clearAll();
         telemetry.addLine(color("<b>HELIX HYDRAULICS | #25879</b>", "#55BBFF"));
-        telemetry.addLine("<b>NEW MECANUM DRIVE - READY</b>");
+        telemetry.addLine("<b>COMPETITION DRIVE - SHOOTER RECOVERY UPDATE</b>");
         addControlGuide();
-        telemetry.addLine(color("Press START on Driver Hub", "#51DF99"));
+        telemetry.addLine("Press START");
         telemetry.update();
     }
 
     private void updateButtons() {
         boolean a = gamepad1.a;
-        if (a && !lastA) {
-            shooterOn = !shooterOn;
-            resetShooterControl();
-        }
+        if (a && !lastA) { shooterOn = !shooterOn; resetShooterControl(); }
         lastA = a;
-
-        // INTAKE: BOTH controls are HOLD, never toggle.
-        // Releasing both stops immediately. Pressing both also stops.
-        // After the 10-second cutoff, release BOTH controls before restarting.
-        boolean xHeld = gamepad1.x;
-        boolean reverseHeld = gamepad1.dpad_left;
-
-        IntakeMode requested = IntakeMode.OFF;
-        if (xHeld && !reverseHeld) requested = IntakeMode.FORWARD;
-        if (reverseHeld && !xHeld) requested = IntakeMode.REVERSE;
-
-        if (!xHeld && !reverseHeld) {
-            intakeTimedOut = false; // Re-arm only after full release.
-        }
-
-        if (requested == IntakeMode.OFF || intakeTimedOut) {
-            intakeMode = IntakeMode.OFF;
-            intakeReversalPending = false;
-        } else if (requested != intakeMode) {
-            startIntake(requested);
-        }
 
         boolean b = gamepad1.b;
         if (b && !lastB) {
@@ -209,13 +167,14 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         }
         lastB = b;
 
+        updateIntakeCommand(gamepad1.x, gamepad1.dpad_left);
+
         boolean up = gamepad1.dpad_up;
         boolean down = gamepad1.dpad_down;
         if (up && !lastUp && !down) {
             targetRPM = Math.min(MAX_TARGET_RPM, targetRPM + RPM_STEP);
             resetReadiness();
-        }
-        if (down && !lastDown && !up) {
+        } else if (down && !lastDown && !up) {
             targetRPM = Math.max(MIN_TARGET_RPM, targetRPM - RPM_STEP);
             resetReadiness();
         }
@@ -227,32 +186,30 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         lastLB = lb;
     }
 
-    private void startIntake(IntakeMode direction) {
-        // Pause 150ms if changing from the last powered direction.
-        intakeReversalPending = lastIntakeDirection != IntakeMode.OFF
-                && lastIntakeDirection != direction;
-        if (intakeReversalPending) reversalTimer.reset();
-        intakeMode = direction;
-        lastIntakeDirection = direction;
-        intakeTimer.reset();
-    }
-
-    private String intakeStatusText() {
-        if (intakeTimedOut) return "AUTO OFF (10s)";
-        if (intakeMode == IntakeMode.FORWARD) return "FORWARD";
-        if (intakeMode == IntakeMode.REVERSE) return "REVERSE";
-        return "OFF";
-    }
-
-    private String intakeCountdownText() {
-        if (intakeTimedOut) return "0.0s";
-        if (intakeMode == IntakeMode.OFF) return "--";
-        return String.format("%.1fs", Math.max(0.0,
-                INTAKE_TIMEOUT_S - intakeTimer.seconds()));
+    private void updateIntakeCommand(boolean forwardHeld, boolean reverseHeld) {
+        if (!forwardHeld && !reverseHeld) {
+            intakeMode = IntakeMode.OFF;
+            intakeReversalPending = false;
+            intakeRequireRelease = false;
+            return;
+        }
+        if (intakeRequireRelease || (forwardHeld && reverseHeld)) {
+            intakeMode = IntakeMode.OFF;
+            intakeReversalPending = false;
+            return;
+        }
+        IntakeMode requested = forwardHeld ? IntakeMode.FORWARD : IntakeMode.REVERSE;
+        if (intakeMode != requested) {
+            boolean reversing = intakeMode != IntakeMode.OFF;
+            intakeMode = requested;
+            intakeTimedOut = false;
+            intakeTimer.reset();
+            intakeReversalPending = reversing;
+            if (reversing) reversalTimer.reset();
+        }
     }
 
     private void resetReadiness() {
-        // A new shooter speed invalidates RPM readiness indication.
         gatePushing = false;
         if (gate != null) gate.setPosition(GATE_CLOSED);
         rpmInRange = false;
@@ -264,27 +221,23 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         resetReadiness();
         filterInitialized = false;
         integratedPower = 0;
+        overspeedCoasting = false;
         shooterFault = false;
         controlTimer.reset();
         spinupTimer.reset();
         if (!shooterOn) {
-            shooter.setPower(0);
             shooterPower = 0;
+            shooter.setPower(0);
         } else {
             shooterPower = START_POWER;
             shooter.setPower(shooterPower);
         }
     }
 
-    /** Software PI controller. The I term removes persistent offset. */
+    // Software PI speed control with anti-windup and overspeed coast.
     private void updateShooter() {
-        // Get real encoder speed even in RUN_WITHOUT_ENCODER mode.
-        actualRPM = Math.abs(shooter.getVelocity()) * 60.0
-                / TICKS_PER_MOTOR_REV;
+        actualRPM = Math.abs(shooter.getVelocity()) * 60.0 / TICKS_PER_MOTOR_REV;
 
-        // Missing encoder feedback must not command maximum motor power.
-        // If the motor has had time to spin but reports virtually no motion,
-        // stop it. Switch A OFF then ON to retry after fixing the issue.
         if (shooterOn && !shooterFault && spinupTimer.seconds() > 1.5
                 && actualRPM < 100.0 && shooterPower >= 0.50) {
             shooterFault = true;
@@ -292,10 +245,10 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
             shooterPower = 0;
             resetReadiness();
         }
-
         if (!shooterOn || shooterFault || targetRPM <= 0) {
             shooterPower = 0;
             integratedPower = 0;
+            overspeedCoasting = false;
             shooter.setPower(0);
             return;
         }
@@ -311,32 +264,46 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         } else {
             filteredRPM += RPM_FILTER_ALPHA * (actualRPM - filteredRPM);
         }
-
         double error = targetRPM - filteredRPM;
-        double feedForward = START_POWER
-                + (targetRPM - DEFAULT_TARGET_RPM) / NOMINAL_FREE_RPM;
-        feedForward = Range.clip(feedForward, 0.0, 1.0);
-
-        // Limit aggressive startup surges from zero speed; increase toward
-        // full available power as the flywheel spins up.
-        double startupLimit = Range.clip(
-                START_POWER + spinupTimer.seconds() * STARTUP_POWER_RAMP_PER_S,
+        double feedForward = Range.clip(START_POWER
+                + (targetRPM - DEFAULT_TARGET_RPM) / NOMINAL_FREE_RPM,
+                0.0, 1.0);
+        double upperLimit = Range.clip(START_POWER
+                + spinupTimer.seconds() * STARTUP_POWER_RAMP_PER_S,
                 START_POWER, 1.0);
-        double preliminary = feedForward + SHOOTER_KP * error + integratedPower;
-        double upperLimit = Math.min(1.0, startupLimit);
 
-        // Anti-windup: do not integrate farther into a saturated output.
-        boolean atUpperLimit = preliminary >= upperLimit && error > 0;
-        boolean atLowerLimit = preliminary <= 0.0 && error < 0;
-        if (!atUpperLimit && !atLowerLimit) {
-            integratedPower = Range.clip(integratedPower
-                            + SHOOTER_KI * error * dt,
-                    -MAX_INTEGRAL, MAX_INTEGRAL);
+        if (!overspeedCoasting &&
+                (filteredRPM > targetRPM + OVERSPEED_COAST_RPM
+                 || actualRPM > targetRPM + 220.0)) {
+            overspeedCoasting = true;
+            integratedPower = Range.clip(
+                    Math.min(integratedPower, 0.0) - 0.03,
+                    -MAX_NEGATIVE_INTEGRAL, 0.0);
+        }
+        if (overspeedCoasting
+                && filteredRPM <= targetRPM + OVERSPEED_RESUME_RPM
+                && actualRPM <= targetRPM + 80.0) {
+            overspeedCoasting = false;
+        }
+        if (overspeedCoasting) {
+            shooterPower = 0.0; // FLOAT: coast; does not actively brake.
+            shooter.setPower(0.0);
+            return;
         }
 
-        shooterPower = Range.clip(
-                feedForward + SHOOTER_KP * error + integratedPower,
-                0.0, upperLimit);
+        if (error < -50.0) {
+            integratedPower = Math.min(integratedPower, 0.0);
+        }
+        double preliminary = feedForward + SHOOTER_KP * error + integratedPower;
+        if (error > 0.0 && error < 180.0 && preliminary < upperLimit) {
+            integratedPower += SHOOTER_KI_UP * error * dt;
+        } else if (error < 0.0 && preliminary > 0.0) {
+            integratedPower += SHOOTER_KI_DOWN * error * dt;
+        }
+        integratedPower = Range.clip(integratedPower,
+                -MAX_NEGATIVE_INTEGRAL, MAX_POSITIVE_INTEGRAL);
+        shooterPower = Range.clip(feedForward + SHOOTER_KP * error
+                + integratedPower, 0.0, upperLimit);
         shooter.setPower(shooterPower);
     }
 
@@ -353,15 +320,13 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
     }
 
     private void updateIntakeAndServos() {
-        // Enforce a 10-second maximum continuous intake run in BOTH directions.
-        if (intakeMode != IntakeMode.OFF
-                && intakeTimer.seconds() >= INTAKE_TIMEOUT_S) {
+        if (intakeMode != IntakeMode.OFF && intakeTimer.seconds() >= INTAKE_TIMEOUT_S) {
             intakeMode = IntakeMode.OFF;
             intakeTimedOut = true;
+            intakeRequireRelease = true;
             intakeReversalPending = false;
         }
-        if (intakeReversalPending
-                && reversalTimer.seconds() < INTAKE_REVERSE_PAUSE_S) {
+        if (intakeReversalPending && reversalTimer.seconds() < INTAKE_REVERSE_PAUSE_S) {
             ballPusher.setPower(0.0);
         } else if (intakeMode == IntakeMode.FORWARD) {
             intakeReversalPending = false;
@@ -372,37 +337,29 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         } else {
             ballPusher.setPower(0.0);
         }
-
-        // =====================================
-        // GATE - MANUAL CONTROL, NO RPM CHECK
-        // =====================================
-
-        // Either gamepad can operate the gate
-        boolean y = gamepad1.y;
-
-        // Open while Y is held, close when released
-        gatePushing = y;
-
-        gate.setPosition(
-                gatePushing ? GATE_OPEN : GATE_CLOSED
-        );
+        // Gate is deliberately MANUAL: Y while held, no RPM interlock.
+        gatePushing = gamepad1.y;
+        gate.setPosition(gatePushing ? GATE_OPEN : GATE_CLOSED);
     }
 
     private void updateDrive() {
-        // Invert only forward/back: push left stick forward -> drive forward.
+        driveController = 1;
         double forward = -gamepad1.left_stick_y;
         double strafe = gamepad1.left_stick_x * 1.1;
         double turn = gamepad1.right_stick_x;
-        double driveScale = gamepad1.left_trigger > 0.1
-                ? PRECISION_SPEED : NORMAL_SPEED;
-        double turnScale = gamepad1.right_trigger > 0.1
-                ? PRECISION_SPEED : NORMAL_SPEED;
+        precisionDrive = gamepad1.left_trigger > 0.1;
+        precisionTurn = gamepad1.right_trigger > 0.1;
+        applyDrive(forward, strafe, turn);
+    }
 
-        // Normalize to avoid unintended clipping when combining directions.
-        double fl = forward * driveScale + turn * turnScale + strafe * driveScale;
-        double bl = forward * driveScale + turn * turnScale - strafe * driveScale;
-        double fr = forward * driveScale - turn * turnScale - strafe * driveScale;
-        double br = forward * driveScale - turn * turnScale + strafe * driveScale;
+
+    private void applyDrive(double forward, double strafe, double turn) {
+        double ds = precisionDrive ? PRECISION_SPEED : NORMAL_SPEED;
+        double ts = precisionTurn ? PRECISION_SPEED : NORMAL_SPEED;
+        double fl = forward * ds + turn * ts + strafe * ds;
+        double bl = forward * ds + turn * ts - strafe * ds;
+        double fr = forward * ds - turn * ts - strafe * ds;
+        double br = forward * ds - turn * ts + strafe * ds;
         double max = Math.max(1.0, Math.max(Math.max(Math.abs(fl), Math.abs(bl)),
                 Math.max(Math.abs(fr), Math.abs(br))));
         frontLeft.setPower(fl / max);
@@ -416,52 +373,53 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         screenTimer.reset();
         double volts = readBatteryVoltage();
         double amps = readShooterAmps();
-        double error = actualRPM - targetRPM;
+        double rpmError = actualRPM - targetRPM;
         String state = !shooterOn ? "OFF" : shooterFault ? "ENCODER / SPIN FAULT"
-                                            : rpmReady ? "READY"
-                                              : shooterPower >= 0.99 && filteredRPM < targetRPM - RPM_READY_BAND
-                                                ? "MAX POWER / LOW RPM" : "SPINNING UP / ADJUSTING";
+                : overspeedCoasting ? "OVERSPEED - COAST"
+                : rpmReady ? "READY"
+                : shooterPower >= 0.99 && filteredRPM < targetRPM - RPM_READY_BAND
+                  ? "MAX POWER / LOW RPM" : "SPINNING UP / ADJUSTING";
         String stateColor = !shooterOn ? "#9BA9BB" : shooterFault ? "#FF5964"
-                                                     : rpmReady ? "#51DF99"
-                                                       : shooterPower >= 0.99 ? "#FF5964" : "#FFD166";
+                : rpmReady ? "#51DF99" : "#FFD166";
         String batteryState = Double.isNaN(volts) ? "N/A"
                 : volts < CRITICAL_BATTERY_V ? "CRITICAL"
-                  : volts < LOW_BATTERY_V ? "LOW" : "OK";
+                : volts < LOW_BATTERY_V ? "LOW" : "OK";
         String batteryColor = Double.isNaN(volts) ? "#9BA9BB"
                 : volts < CRITICAL_BATTERY_V ? "#FF5964"
-                  : volts < LOW_BATTERY_V ? "#FFD166" : "#51DF99";
+                : volts < LOW_BATTERY_V ? "#FFD166" : "#51DF99";
 
         telemetry.clearAll();
         telemetry.addLine(color("<b>HELIX HYDRAULICS | #25879</b>", "#55BBFF"));
         if (!detailsPage) {
-            // Flash bright / dark green while READY; refresh ~5x per second.
-            // A large, always-visible status line remains readable while dark.
             if (rpmReady) {
                 boolean bright = ((int) (readyFlashTimer.milliseconds() / 500)) % 2 == 0;
                 telemetry.addLine(color("<big><big><b>*** READY TO SHOOT ***</b></big></big>",
                         bright ? "#00FF55" : "#197843"));
             } else if (shooterFault) {
                 telemetry.addLine(color("<big><b>!!! SHOOTER FAULT !!!</b></big>", "#FF5964"));
+            } else if (overspeedCoasting) {
+                telemetry.addLine(color("<big><b>OVERSPEED - COAST</b></big>", "#FFD166"));
             } else if (shooterOn) {
                 telemetry.addLine(color("<big><b>NOT READY - WAIT FOR RPM</b></big>", "#FFD166"));
             } else {
                 telemetry.addLine(color("<big><b>SHOOTER OFF</b></big>", "#9BA9BB"));
             }
             telemetry.addLine(mono(String.format("RPM ACT %.0f  TARGET %.0f  ERR %+.0f",
-                    actualRPM, targetRPM, error)));
+                    actualRPM, targetRPM, rpmError)));
             telemetry.addLine(color(mono("RPM " + gauge(filteredRPM, targetRPM, 14)),
                     rpmReady ? "#51DF99" : "#55BBFF"));
             telemetry.addLine(mono(String.format("PWR %.1f%%  I %sA  BAT %sV  ",
                     shooterPower * 100.0, fmt(amps, 1), fmt(volts, 1)))
                     + color(batteryState, batteryColor));
             telemetry.addLine(color("<b>INTAKE " + intakeStatusText()
-                            + " | TIME LEFT " + intakeCountdownText() + "</b>",
-                    intakeTimedOut ? "#FFD166" :
-                            intakeMode == IntakeMode.OFF ? "#9BA9BB" : "#51DF99"));
+                    + " | TIME LEFT " + intakeCountdownText() + "</b>",
+                    intakeTimedOut ? "#FFD166"
+                    : intakeMode == IntakeMode.OFF ? "#9BA9BB" : "#51DF99"));
             telemetry.addLine("GATE " + status(gatePushing, "PUSH", "CLOSED")
                     + "  STICK " + status(stickOpen, "OPEN", "CLOSED"));
-            telemetry.addLine("DRIVE " + (gamepad1.left_trigger > 0.1 ? "25%" : "100%")
-                    + "  TURN " + (gamepad1.right_trigger > 0.1 ? "25%" : "100%"));
+            telemetry.addLine("DRIVER GP" + driveController
+                    + "  DRIVE " + (precisionDrive ? "25%" : "100%")
+                    + "  TURN " + (precisionTurn ? "25%" : "100%"));
             addControlGuide();
         } else {
             telemetry.addLine(color("<b>DIAGNOSTICS | LB: MATCH</b>", "#FFD166"));
@@ -470,8 +428,7 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
                     targetRPM, actualRPM)));
             telemetry.addLine(mono(String.format("Filtered: %.1f  Error: %+.1f RPM",
                     filteredRPM, targetRPM - filteredRPM)));
-            telemetry.addLine("Stable +/-20 RPM for 350ms: "
-                    + status(rpmReady, "YES", "NO"));
+            telemetry.addLine("Stable +/-20 RPM for 350ms: " + status(rpmReady, "YES", "NO"));
             telemetry.addLine(mono(String.format("Power: %.2f%%  PI I-term: %+.4f",
                     shooterPower * 100.0, integratedPower)));
             telemetry.addLine(mono("Current: " + fmt(amps, 2) + " A"));
@@ -489,14 +446,28 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         telemetry.update();
     }
 
+    private String intakeStatusText() {
+        if (intakeTimedOut) return "AUTO OFF (10s)";
+        if (intakeMode == IntakeMode.FORWARD) return "FORWARD";
+        if (intakeMode == IntakeMode.REVERSE) return "REVERSE";
+        return "OFF";
+    }
+
+    private String intakeCountdownText() {
+        if (intakeTimedOut) return "0.0s";
+        if (intakeMode == IntakeMode.OFF) return "--";
+        return String.format("%.1fs", Math.max(0.0,
+                INTAKE_TIMEOUT_S - intakeTimer.seconds()));
+    }
+
     private void addControlGuide() {
         telemetry.addLine(color("<b>GAMEPAD 1 - ALL COMMANDS</b>", "#55BBFF"));
         telemetry.addLine("L STICK MOVE/STRAFE | R STICK TURN | LT/RT SLOW");
-        telemetry.addLine("A SHOOT TOGGLE  | B STICK TOGGLE");
-        telemetry.addLine("HOLD X INTAKE FWD | HOLD DPAD LEFT INTAKE REV");
-        telemetry.addLine("Y GATE HOLD (INDEPENDENT OF RPM)");
-        telemetry.addLine("DPAD UP +10 / DOWN -10 RPM | RIGHT UNUSED");
-        telemetry.addLine("INTAKE MAX 10s (RELEASE TO REARM) | LB DETAILS");
+        telemetry.addLine("A SHOOT TOGGLE | B STICK TOGGLE");
+        telemetry.addLine("X FWD INTAKE HOLD | DPAD LEFT REV HOLD");
+        telemetry.addLine("Y GATE HOLD (MANUAL, ANY RPM)");
+        telemetry.addLine("DPAD UP +10 / DOWN -10 RPM | LB DETAILS");
+        telemetry.addLine("INTAKE MAX 10s | RELEASE BEFORE RESTART");
     }
 
     private String status(boolean enabled, String yes, String no) {
