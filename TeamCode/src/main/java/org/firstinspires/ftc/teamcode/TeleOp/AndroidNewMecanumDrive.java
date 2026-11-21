@@ -16,6 +16,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
  * Updated shooter controller: lower integral windup, fast overspeed cutback.
  * Intake X=forward hold, D-pad LEFT=reverse hold; timeout 10 seconds.
  * A=shooter toggle, B=stick toggle, Y=manual gate hold (any RPM).
+ * INIT D-pad UP/DOWN changes gate travel; Y previews motion with motor OFF.
+ * During match hold RB + D-pad UP/DOWN to trim gate travel (+/-0.010).
  * D-pad UP/DOWN=target +/-10 RPM, LB=diagnostics.
  * Left stick drive/strafe; right stick turn; LT/RT precision.
  * Preserves RUN_WITHOUT_ENCODER and existing hardware names/directions.
@@ -66,7 +68,15 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
     private final ElapsedTime stableTimer = new ElapsedTime();
 
     private static final double GATE_CLOSED = 0.189;
-    private static final double GATE_OPEN = 0.50;
+    // GATE TUNING: change this default in code after finding the best value.
+    // Travel is the difference between the CLOSED and OPEN servo positions.
+    // Old travel was 0.311 (open 0.500); start smaller at 0.120.
+    private static final double GATE_DEFAULT_TRAVEL = 0.120;
+    private static final double GATE_TRAVEL_STEP = 0.010;
+    private static final double GATE_TRAVEL_MIN = 0.020;
+    private static final double GATE_TRAVEL_MAX = 0.311;
+    private double gateTravel = Range.clip(GATE_DEFAULT_TRAVEL,
+            GATE_TRAVEL_MIN, GATE_TRAVEL_MAX);
     private static final double STICK_CLOSED = 0.80;
     private static final double STICK_OPEN = 0.20;
     private boolean stickOpen = false;
@@ -99,8 +109,7 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
     @Override
     public void runOpMode() {
         initializeHardware();
-        showInitScreen();
-        waitForStart();
+        tuneGateBeforeStart();
         if (isStopRequested()) return;
         controlTimer.reset();
         screenTimer.reset();
@@ -146,13 +155,52 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         telemetry.setMsTransmissionInterval(200);
     }
 
-    private void showInitScreen() {
-        telemetry.clearAll();
-        telemetry.addLine(color("<b>HELIX HYDRAULICS | #25879</b>", "#55BBFF"));
-        telemetry.addLine("<b>COMPETITION DRIVE - SHOOTER RECOVERY UPDATE</b>");
-        addControlGuide();
-        telemetry.addLine("Press START");
-        telemetry.update();
+    // Runs in INIT, before pressing START. Shooter and intake remain OFF.
+    private void tuneGateBeforeStart() {
+        boolean previousUp = false;
+        boolean previousDown = false;
+        while (!isStarted() && !isStopRequested()) {
+            boolean up = gamepad1.dpad_up;
+            boolean down = gamepad1.dpad_down;
+
+            if (up && !previousUp && !down) changeGateTravel(+1);
+            else if (down && !previousDown && !up) changeGateTravel(-1);
+            previousUp = up;
+            previousDown = down;
+
+            // Hold Y to preview the distance without running the shooter.
+            gatePushing = gamepad1.y;
+            gate.setPosition(gatePushing ? gateOpenPosition() : GATE_CLOSED);
+
+            telemetry.clearAll();
+            telemetry.addLine(color("<b>25879 | GATE SETUP (INIT)</b>", "#55BBFF"));
+            telemetry.addLine("D-pad UP = more travel | DOWN = less travel");
+            telemetry.addLine("Hold Y = preview gate | release Y = close");
+            telemetry.addLine(mono(String.format(
+                    "CLOSED %.3f  OPEN %.3f  TRAVEL %.3f",
+                    GATE_CLOSED, gateOpenPosition(), gateTravel)));
+            telemetry.addLine("START = use this setting during the match");
+            telemetry.addLine("To reuse next time, edit GATE_DEFAULT_TRAVEL in Java");
+            telemetry.addLine("No balls in mechanism during first motion test");
+            telemetry.update();
+            sleep(40);
+        }
+        gatePushing = false;
+        gate.setPosition(GATE_CLOSED);
+        // Avoid an accidental button edge immediately after START.
+        lastUp = gamepad1.dpad_up;
+        lastDown = gamepad1.dpad_down;
+        lastA = gamepad1.a;
+        lastB = gamepad1.b;
+    }
+
+    private double gateOpenPosition() {
+        return Range.clip(GATE_CLOSED + gateTravel, 0.0, 1.0);
+    }
+
+    private void changeGateTravel(int steps) {
+        gateTravel = Range.clip(gateTravel + steps * GATE_TRAVEL_STEP,
+                GATE_TRAVEL_MIN, GATE_TRAVEL_MAX);
     }
 
     private void updateButtons() {
@@ -171,12 +219,20 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
 
         boolean up = gamepad1.dpad_up;
         boolean down = gamepad1.dpad_down;
+        // RB switches D-pad UP/DOWN from shooter RPM to gate travel trim.
+        boolean gateTrim = gamepad1.right_bumper;
         if (up && !lastUp && !down) {
-            targetRPM = Math.min(MAX_TARGET_RPM, targetRPM + RPM_STEP);
-            resetReadiness();
+            if (gateTrim) changeGateTravel(+1);
+            else {
+                targetRPM = Math.min(MAX_TARGET_RPM, targetRPM + RPM_STEP);
+                resetReadiness();
+            }
         } else if (down && !lastDown && !up) {
-            targetRPM = Math.max(MIN_TARGET_RPM, targetRPM - RPM_STEP);
-            resetReadiness();
+            if (gateTrim) changeGateTravel(-1);
+            else {
+                targetRPM = Math.max(MIN_TARGET_RPM, targetRPM - RPM_STEP);
+                resetReadiness();
+            }
         }
         lastUp = up;
         lastDown = down;
@@ -339,7 +395,7 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         }
         // Gate is deliberately MANUAL: Y while held, no RPM interlock.
         gatePushing = gamepad1.y;
-        gate.setPosition(gatePushing ? GATE_OPEN : GATE_CLOSED);
+        gate.setPosition(gatePushing ? gateOpenPosition() : GATE_CLOSED);
     }
 
     private void updateDrive() {
@@ -417,6 +473,8 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
                     : intakeMode == IntakeMode.OFF ? "#9BA9BB" : "#51DF99"));
             telemetry.addLine("GATE " + status(gatePushing, "PUSH", "CLOSED")
                     + "  STICK " + status(stickOpen, "OPEN", "CLOSED"));
+            telemetry.addLine(mono(String.format("GATE OPEN %.3f | TRAVEL %.3f",
+                    gateOpenPosition(), gateTravel)));
             telemetry.addLine("DRIVER GP" + driveController
                     + "  DRIVE " + (precisionDrive ? "25%" : "100%")
                     + "  TURN " + (precisionTurn ? "25%" : "100%"));
@@ -436,6 +494,8 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
                     + " V " + batteryState, batteryColor));
             telemetry.addLine(mono(String.format("Gate: %.3f  Stick: %.3f",
                     gate.getPosition(), stick.getPosition())));
+            telemetry.addLine(mono(String.format("Gate closed %.3f | open %.3f | travel %.3f",
+                    GATE_CLOSED, gateOpenPosition(), gateTravel)));
             telemetry.addLine("Intake: " + intakeStatusText()
                     + " | Time left: " + intakeCountdownText());
             telemetry.addLine("Shooter " + status(shooterOn, "ON", "OFF"));
@@ -467,6 +527,7 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         telemetry.addLine("X FWD INTAKE HOLD | DPAD LEFT REV HOLD");
         telemetry.addLine("Y GATE HOLD (MANUAL, ANY RPM)");
         telemetry.addLine("DPAD UP +10 / DOWN -10 RPM | LB DETAILS");
+        telemetry.addLine("HOLD RB + DPAD UP/DOWN = GATE TRAVEL +/-0.010");
         telemetry.addLine("INTAKE MAX 10s | RELEASE BEFORE RESTART");
     }
 
