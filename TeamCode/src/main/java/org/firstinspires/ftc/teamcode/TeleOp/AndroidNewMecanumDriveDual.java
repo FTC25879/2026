@@ -67,15 +67,16 @@ public class AndroidNewMecanumDriveDual extends LinearOpMode {
     private final ElapsedTime spinupTimer = new ElapsedTime();
     private final ElapsedTime stableTimer = new ElapsedTime();
 
+    // GATE POSITION DEFAULTS: set GATE_DEFAULT_OPEN to the desired open position.
+    // The gate starts CLOSED (0.189) and opens to 0.309 when Y is held.
+    // Legal GATE_DEFAULT_OPEN range with current limits: 0.209 through 0.500.
     private static final double GATE_CLOSED = 0.189;
-    // GATE TUNING: change this default in code after finding the best value.
-    // Travel is the difference between the CLOSED and OPEN servo positions.
-    // Old travel was 0.311 (open 0.500); start smaller at 0.120.
-    private static final double GATE_DEFAULT_TRAVEL = 0.120;
+    private static final double GATE_DEFAULT_OPEN = 0.309;
     private static final double GATE_TRAVEL_STEP = 0.010;
     private static final double GATE_TRAVEL_MIN = 0.020;
     private static final double GATE_TRAVEL_MAX = 0.311;
-    private double gateTravel = Range.clip(GATE_DEFAULT_TRAVEL,
+    // Keep live gamepad tuning as a travel offset from the closed position.
+    private double gateTravel = Range.clip(GATE_DEFAULT_OPEN - GATE_CLOSED,
             GATE_TRAVEL_MIN, GATE_TRAVEL_MAX);
     private static final double STICK_CLOSED = 0.80;
     private static final double STICK_OPEN = 0.20;
@@ -181,8 +182,10 @@ public class AndroidNewMecanumDriveDual extends LinearOpMode {
             telemetry.addLine(mono(String.format(
                     "CLOSED %.3f  OPEN %.3f  TRAVEL %.3f",
                     GATE_CLOSED, gateOpenPosition(), gateTravel)));
+            telemetry.addLine(mono(String.format(
+                    "DEFAULT OPEN %.3f  (editable in Java)", GATE_DEFAULT_OPEN)));
             telemetry.addLine("START = use this setting during the match");
-            telemetry.addLine("To reuse next time, edit GATE_DEFAULT_TRAVEL in Java");
+            telemetry.addLine("To reuse next time, edit GATE_DEFAULT_OPEN in Java");
             telemetry.addLine("No balls in mechanism during first motion test");
             telemetry.update();
             sleep(40);
