@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.TeleOp;
 
+import android.annotation.SuppressLint;
+
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -75,7 +77,7 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
     private static final double GATE_TRAVEL_STEP = 0.010;
     private static final double GATE_TRAVEL_MIN = 0.020;
     private static final double GATE_TRAVEL_MAX = 0.311;
-    // Keep live gamepad tuning as a travel offset from the closed position.
+    // Keep live gamepad tuning as travel offset from the closed position.
     private double gateTravel = Range.clip(GATE_DEFAULT_OPEN - GATE_CLOSED,
             GATE_TRAVEL_MIN, GATE_TRAVEL_MAX);
     private static final double STICK_CLOSED = 0.80;
@@ -85,7 +87,7 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
 
     private static final double NORMAL_SPEED = 1.0;
     private static final double PRECISION_SPEED = 0.25;
-    private static final double DRIVE_DEADBAND = 0.08;
+//    private static final double DRIVE_DEADBAND = 0.08;
     private int driveController = 1;
     private boolean precisionDrive = false;
     private boolean precisionTurn = false;
@@ -157,6 +159,7 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
     }
 
     // Runs in INIT, before pressing START. Shooter and intake remain OFF.
+    @SuppressLint("DefaultLocale")
     private void tuneGateBeforeStart() {
         boolean previousUp = false;
         boolean previousDown = false;
@@ -427,6 +430,7 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         backRight.setPower(br / max);
     }
 
+    @SuppressLint("DefaultLocale")
     private void updateDashboard() {
         if (screenTimer.milliseconds() < 200) return;
         screenTimer.reset();
@@ -516,6 +520,7 @@ public class AndroidNewMecanumDrive extends LinearOpMode {
         return "OFF";
     }
 
+    @SuppressLint("DefaultLocale")
     private String intakeCountdownText() {
         if (intakeTimedOut) return "0.0s";
         if (intakeMode == IntakeMode.OFF) return "--";
